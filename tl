@@ -1,45 +1,56 @@
-#!/usr/bin/env ruby
-#
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 # Affiche les prochains bus/metros d'apres les données accessibles sur le site
 # des transports publics lausannois (http://www.t-l.ch/).
 #
-# Copyleft 2012 François Deppierraz
-# License GPL
+# Portage en Python du projet initialement en Ruby de François Deppierraz
+# (https://github.com/ctrlaltdel/tl-cli)
 #
-# 09.12.2012 - Initial release
+# Copyleft 2013 Aymeric Bringard
+# License GPL v2 (https://www.gnu.org/licenses/gpl-2.0.txt)
+#
+# 30.06.2013 - Initial release
+
 
 ##### CONFIG
 
 STOPS = {
-  '13-loz' => ['13|Provence Nord - Verdeil|13', 'Montelly', 'A'],
-  '13-provence' => ['13|Provence Nord - Verdeil|13', 'Montelly', 'R'],
-  'm1-loz' => ['70|Renens-Gare - Lausanne-Flon|70', 'Montelly', 'A'],
-  'm1-renens' => ['70|Renens-Gare - Lausanne-Flon|70', 'Montelly', 'R'],
+    '13-loz': ['13|Provence Nord - Verdeil|13', 'Montelly', 'A'],
+    '13-provence': ['13|Provence Nord - Verdeil|13', 'Montelly', 'R'],
+    'm1-loz': ['70|Renens-Gare - Lausanne-Flon|70', 'Montelly', 'A'],
+    'm1-renens': ['70|Renens-Gare - Lausanne-Flon|70', 'Montelly', 'R'],
 }
 
 ##### END CONFIG
 
-require 'rubygems'
-require 'hpricot'
-require 'open-uri'
-require 'time'
-require 'uri'
+import requests
+import urllib
+from bs4 import BeautifulSoup
+from itertools import imap
 
-def download_horaire(ligne, arret, sens)
-  url = "http://www.t-l.ch/index.php?option=com_tl&task=hd&Itemid=7&arret=#{URI.escape(arret)}&ligne=#{URI.escape(ligne)}&sens=#{URI.escape(sens)}"
 
-  path = "html body table#body_table tbody tr td table#tbmain1 tbody tr td#container div#content_box.content_voyages div.content_box_voyages_step2 table tbody tr"
+def download_horaire(ligne, arret, sens):
+    url = "http://www.t-l.ch/index.php"
+    params = {
+        'option': 'com_tl',
+        'task': 'hd',
+        'Itemid': 7,
+        'arret': arret,
+        'ligne': ligne,
+        'sens': sens }
+    headers = { 'User-Agent': 'Browser' } # Le site filtre les user-agent contenant 'python'.
 
-  doc = Hpricot(open(url))
+    req = requests.get(url, params=params, headers=headers)
+    page = BeautifulSoup(req.text)
 
-  return (doc/"div.content_box_voyages_step2//tr").collect {|x| (x/"td").inner_html }
-end
+    # On enlève la dernière cellule contenant "* Ces horaires sont théoriques"
+    return (horaire.get_text() for horaire in page.select('div.content_box_voyages_step2 td')[:-1])
 
-stop_name_length = STOPS.keys.collect{|x| x.length}.max
 
-STOPS.keys.each do |nom|
-  (ligne, arret, sens) = STOPS[nom]
-  prochains = download_horaire(ligne, arret, sens)
-  prochains.pop # Enleve "* Ces horaires sont théoriques"
-  puts nom.ljust(stop_name_length) + " " + prochains.join(" | ")
-end
+stop_name_length = max(imap(len,STOPS))
+
+for nom in STOPS.keys():
+    (ligne, arret, sens) = STOPS[nom]
+    prochains = download_horaire(ligne, arret, sens)
+    print nom.ljust(stop_name_length),' ',' | '.join(prochains)
